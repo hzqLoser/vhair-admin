@@ -1,5 +1,5 @@
 import React from 'react';
-import { Form, Input, Button, Card, message } from 'antd';
+import { Form, Input, Button, Card, App as AntdApp } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
@@ -10,6 +10,7 @@ import { useAuth } from '../../hooks/useAuth';
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { message } = AntdApp.useApp();
 
   const { mutate: doLogin, isPending } = useMutation({
     mutationFn: loginApi,
@@ -29,9 +30,9 @@ const LoginPage: React.FC = () => {
     <div className="min-h-screen bg-gray-100 flex items-center justify-center bg-[url('https://picsum.photos/1920/1080?blur=2')] bg-cover bg-center">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
       
-      <Card 
-        className="w-full max-w-md shadow-2xl z-10 rounded-xl" 
-        bordered={false}
+      <Card
+        className="w-full max-w-md shadow-2xl z-10 rounded-xl"
+        variant="borderless"
       >
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-800">HairMatch</h1>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Form, Input, Select, InputNumber, Upload, message, Button } from 'antd';
+import { Modal, Form, Input, Select, InputNumber, Upload, Button, App as AntdApp } from 'antd';
 import { PlusOutlined, LoadingOutlined, UploadOutlined } from '@ant-design/icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AdminHairstyle, AdminCreateHairstyleRequest, AdminUpdateHairstyleRequest } from '../../api/types';
@@ -23,6 +23,7 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
   const isEdit = !!initialValues;
+  const { message } = AntdApp.useApp();
 
   // Image Upload State
   const [fileList, setFileList] = useState<UploadFile[]>([]);
@@ -382,10 +383,10 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
         // Remove default footer to customize layout
         footer={null}
         width={900} // Increase modal width for better layout
-        destroyOnClose
+        destroyOnHidden
         zIndex={10000}
         // Add padding to prevent content from touching modal edges
-        bodyStyle={{ padding: '20px', overflow: 'visible' }}
+        styles={{ body: { padding: '20px', overflow: 'visible' } }}
       >
         <div className="flex flex-col items-center gap-6">
           {/* Use fixed size container with proper aspect ratio */}
@@ -451,21 +452,23 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
           maxHeight: '90vh',
           zIndex: 10000
         }}
-        bodyStyle={{
-          padding: '0',
-          backgroundColor: 'transparent',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden'
+        styles={{
+          body: {
+            padding: '0',
+            backgroundColor: 'transparent',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden'
+          },
+          mask: { backgroundColor: 'transparent' },
+          wrap: { backgroundColor: 'transparent' }
         }}
-        maskStyle={{ backgroundColor: 'transparent' }}
-        wrapStyle={{ backgroundColor: 'transparent' }}
         closable={false}
         maskClosable={true}
         transitionName=""
         maskTransitionName=""
-        destroyOnClose={true}
+        destroyOnHidden={true}
       >
         <img
           alt="Preview"

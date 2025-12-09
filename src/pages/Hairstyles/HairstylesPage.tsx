@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Button, Input, Select, Tag, Popconfirm, message, Space, Modal } from 'antd';
+import { Table, Button, Input, Select, Tag, Popconfirm, Space, Modal, App as AntdApp } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getHairstylesApi, deleteHairstyleApi } from '../../api/hairstyles';
@@ -11,6 +11,7 @@ const { Option } = Select;
 
 const HairstylesPage: React.FC = () => {
   const queryClient = useQueryClient();
+  const { message } = AntdApp.useApp();
 
   // Filter States
   const [page, setPage] = useState(1);
@@ -249,21 +250,23 @@ const HairstylesPage: React.FC = () => {
           maxHeight: '90vh',
           zIndex: 10000
         }}
-        bodyStyle={{
-          padding: '0',
-          backgroundColor: 'transparent',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden'
+        styles={{
+          body: {
+            padding: '0',
+            backgroundColor: 'transparent',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden'
+          },
+          mask: { backgroundColor: 'transparent' },
+          wrap: { backgroundColor: 'transparent' }
         }}
-        maskStyle={{ backgroundColor: 'transparent' }}
-        wrapStyle={{ backgroundColor: 'transparent' }}
         closable={false}
         maskClosable={true}
         transitionName=""
         maskTransitionName=""
-        destroyOnClose={true}
+        destroyOnHidden={true}
       >
         <img
           alt="Preview"

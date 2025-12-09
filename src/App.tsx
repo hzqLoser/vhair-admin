@@ -1,9 +1,10 @@
-import React, { Component, ReactNode } from 'react';
+import React, { Component, ReactNode, useEffect } from 'react';
 import { RouterProvider } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConfigProvider, Button, App as AntdApp } from 'antd';
 import { router } from './router';
 import { AuthProvider } from './hooks/useAuth';
+import { setMessageApi } from './utils/messageApi';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -58,6 +59,24 @@ const queryClient = new QueryClient({
     },
 });
 
+const InnerApp: React.FC = () => {
+  const { message } = AntdApp.useApp();
+
+  useEffect(() => {
+    setMessageApi(message);
+  }, [message]);
+
+  return (
+    <ErrorBoundary>
+      <AuthProvider>
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </AuthProvider>
+    </ErrorBoundary>
+  );
+};
+
 const App: React.FC = () => {
   return (
     <ConfigProvider
@@ -70,13 +89,7 @@ const App: React.FC = () => {
     >
       {/* AntdApp provides context for static methods like message, notification, modal */}
       <AntdApp>
-        <ErrorBoundary>
-          <AuthProvider>
-               <QueryClientProvider client={queryClient}>
-                  <RouterProvider router={router} />
-              </QueryClientProvider>
-          </AuthProvider>
-        </ErrorBoundary>
+        <InnerApp />
       </AntdApp>
     </ConfigProvider>
   );
