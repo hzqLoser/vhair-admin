@@ -1,0 +1,5 @@
+{
+  "name": "HairMatch Admin",
+  "description": "Professional Admin Dashboard for HairMatch backend management, featuring authentication, data visualization, and hairstyle inventory control.",
+  "requestFramePermissions": []
+}
