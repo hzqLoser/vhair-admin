@@ -8,7 +8,7 @@ import { uploadImageApi } from '../../api/upload';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
 import Cropper from 'react-easy-crop';
 import 'react-easy-crop/react-easy-crop.css';
-import { getCroppedImg } from '../../utils/cropImage';
+import { compressCanvasImage, getCroppedImg } from '../../utils/cropImage';
 
 interface Props {
   open: boolean;
@@ -37,6 +37,7 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
   const [imageSrc, setImageSrc] = useState<string>('');
   const [originalFile, setOriginalFile] = useState<File | null>(null);
   const [tempFileUid, setTempFileUid] = useState<string | null>(null); // 保存临时文件的UID
+  const [previousFileList, setPreviousFileList] = useState<UploadFile[]>([]);
 
   // Image Preview State
   const [previewVisible, setPreviewVisible] = useState(false);
@@ -83,9 +84,16 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
           status: 'done',
           url: initialValues.imageUrl,
         }]);
+        setPreviousFileList([{
+          uid: '-1',
+          name: 'current-image.png',
+          status: 'done',
+          url: initialValues.imageUrl,
+        }]);
       } else {
         form.resetFields();
         setFileList([]);
+        setPreviousFileList([]);
       }
     }
   }, [open, initialValues, form]);
@@ -142,6 +150,7 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
 
   // Handle File Selection and Open Crop Modal
   const handleFileSelect = (file: File) => {
+    setPreviousFileList(fileList);
     const reader = new FileReader();
     reader.onload = (e) => {
       setImageSrc(e.target?.result as string);
@@ -169,17 +178,11 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
       setUploading(true);
       const croppedImage = await getCroppedImg(imageSrc, croppedAreaPixels);
 
-      // Convert cropped canvas to File
-      const blob = await new Promise<Blob>((resolve) => {
-        croppedImage.toBlob((b) => resolve(b!));
-      });
+      // Compress cropped canvas before upload to ensure it is under 400KB
+      const compressedFile = await compressCanvasImage(croppedImage, originalFile, 400);
 
-      const croppedFile = new File([blob], originalFile.name, {
-        type: originalFile.type,
-      });
-
-      // Upload cropped file
-      const res = await uploadImageApi(croppedFile);
+      // Upload compressed & cropped file
+      const res = await uploadImageApi(compressedFile);
       setUploading(false);
 
       // Update Form Field for backend submission
@@ -188,7 +191,13 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
       // Update UI Preview
       setFileList([{
         uid: '1',
-        name: originalFile.name,
+        name: compressedFile.name,
+        status: 'done',
+        url: res.imageUrl,
+      }]);
+      setPreviousFileList([{
+        uid: '1',
+        name: compressedFile.name,
         status: 'done',
         url: res.imageUrl,
       }]);
@@ -215,10 +224,8 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
     // 当用户选择文件时，记录最后添加的临时文件的UID
     if (newFileList.length > fileList.length) {
       const newFile = newFileList[newFileList.length - 1];
-      if (newFile.status === 'uploading' && tempFileUid) {
-        // 更新临时文件的UID为Ant Design分配的UID
-        setTempFileUid(newFile.uid);
-      }
+      // 更新临时文件的UID为Ant Design分配的UID，防止取消时无法清除
+      setTempFileUid(newFile.uid);
     }
 
     setFileList(newFileList);
@@ -239,16 +246,20 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
     setZoom(1);
     setCroppedAreaPixels(null);
 
-    // Clear the temporary file that was selected but not cropped
+    // Clear the temporary file that was selected but not cropped and restore previous preview
     if (tempFileUid) {
       const updatedFileList = fileList.filter(file => file.uid !== tempFileUid);
-      setFileList(updatedFileList);
+      const fallbackFileList = updatedFileList.length > 0 ? updatedFileList : previousFileList;
+      setFileList(fallbackFileList);
+      setPreviousFileList(fallbackFileList);
 
-      // If we're editing and removed the only file, keep the original imagePath
-      // Only clear imagePath if we're creating a new hairstyle or explicitly removed all files
-      if (!initialValues && updatedFileList.length === 0) {
+      // If we're creating a new hairstyle and removed all files, clear the value
+      if (!initialValues && fallbackFileList.length === 0) {
         form.setFieldValue('imagePath', null);
       }
+    } else if (previousFileList.length) {
+      setFileList(previousFileList);
+      setPreviousFileList(previousFileList);
     }
 
     // 清空临时文件UID
