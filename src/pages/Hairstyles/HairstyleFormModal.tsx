@@ -156,6 +156,9 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
     reader.onload = (e) => {
       setImageSrc(e.target?.result as string);
       setOriginalFile(file);
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
+      setCroppedAreaPixels(null);
       setCropModalVisible(true);
       // 使用当前时间戳作为临时ID
       setTempFileUid(Date.now().toString());
@@ -404,7 +407,17 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
                     onZoomChange={setZoom}
                     onCropComplete={handleCropComplete}
                     // Set container height explicitly
-                    style={{ containerStyle: { height: '100%', width: '100%' } }}
+                    style={{
+                      containerStyle: { height: '100%', width: '100%' },
+                      cropAreaStyle: {
+                        border: '2px dashed #1677ff',
+                        boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.45)',
+                      },
+                      mediaStyle: {
+                        objectFit: 'contain',
+                        objectPosition: 'center',
+                      },
+                    }}
                     // Enable mouse wheel zoom
                     zoomWithScroll={true}
                   />
