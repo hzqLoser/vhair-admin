@@ -221,16 +221,22 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
 
   // Handle Upload Change - Update file list
   const handleUploadChange: UploadProps['onChange'] = ({ fileList: newFileList }) => {
-    // 当用户选择文件时，记录最后添加的临时文件的UID
-    if (newFileList.length > fileList.length) {
+    const isAddingFile = newFileList.length > fileList.length;
+
+    // 当用户选择文件时，记录最后添加的临时文件的UID，并保持显示上一次确认的图片
+    if (isAddingFile) {
       const newFile = newFileList[newFileList.length - 1];
-      // 更新临时文件的UID为Ant Design分配的UID，防止取消时无法清除
       setTempFileUid(newFile.uid);
+
+      // 不展示未确认的本地文件，继续显示上一次确认的图片列表
+      setFileList(previousFileList);
+      return;
     }
 
+    // 处理删除等操作
     setFileList(newFileList);
+    setPreviousFileList(newFileList);
 
-    // If removed
     if (newFileList.length === 0) {
       form.setFieldValue('imagePath', null);
     }
@@ -246,23 +252,14 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
     setZoom(1);
     setCroppedAreaPixels(null);
 
-    // Clear the temporary file that was selected but not cropped and restore previous preview
-    if (tempFileUid) {
-      const updatedFileList = fileList.filter(file => file.uid !== tempFileUid);
-      const fallbackFileList = updatedFileList.length > 0 ? updatedFileList : previousFileList;
-      setFileList(fallbackFileList);
-      setPreviousFileList(fallbackFileList);
+    // 恢复上一次确认的图片列表，清除未确认的本地文件
+    setFileList(previousFileList);
+    setPreviousFileList(previousFileList);
 
-      // If we're creating a new hairstyle and removed all files, clear the value
-      if (!initialValues && fallbackFileList.length === 0) {
-        form.setFieldValue('imagePath', null);
-      }
-    } else if (previousFileList.length) {
-      setFileList(previousFileList);
-      setPreviousFileList(previousFileList);
+    if (!previousFileList.length) {
+      form.setFieldValue('imagePath', null);
     }
 
-    // 清空临时文件UID
     setTempFileUid(null);
   };
 
