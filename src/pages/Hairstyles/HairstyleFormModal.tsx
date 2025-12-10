@@ -37,12 +37,19 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [imageSrc, setImageSrc] = useState<string>('');
   const [originalFile, setOriginalFile] = useState<File | null>(null);
-  const [tempFileUid, setTempFileUid] = useState<string | null>(null); // 保存临时文件的UID
   const [previousFileList, setPreviousFileList] = useState<UploadFile[]>([]);
 
   // Image Preview State
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewImage, setPreviewImage] = useState('');
+
+  const normalizeUploadList = (list: UploadFile[]): UploadFile[] =>
+    list.map(({ uid, name, status, url, thumbUrl }) => ({
+      uid,
+      name,
+      status,
+      url: url || thumbUrl,
+    }));
 
   // Auto adjust initial zoom to fit image in crop area
   useEffect(() => {
@@ -151,7 +158,7 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
 
   // Handle File Selection and Open Crop Modal
   const handleFileSelect = (file: File) => {
-    setPreviousFileList(fileList);
+    setPreviousFileList(normalizeUploadList(fileList));
     const reader = new FileReader();
     reader.onload = (e) => {
       setImageSrc(e.target?.result as string);
@@ -160,8 +167,6 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
       setZoom(1);
       setCroppedAreaPixels(null);
       setCropModalVisible(true);
-      // 使用当前时间戳作为临时ID
-      setTempFileUid(Date.now().toString());
     };
     reader.readAsDataURL(file);
   };
@@ -193,22 +198,18 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
       form.setFieldValue('imagePath', res.imagePath);
 
       // Update UI Preview
-      setFileList([{
+      const uploadedFile: UploadFile = {
         uid: '1',
         name: compressedFile.name,
         status: 'done',
         url: res.imageUrl,
-      }]);
-      setPreviousFileList([{
-        uid: '1',
-        name: compressedFile.name,
-        status: 'done',
-        url: res.imageUrl,
-      }]);
+      };
+
+      setFileList([uploadedFile]);
+      setPreviousFileList([uploadedFile]);
 
       setCropModalVisible(false);
       // 清空临时文件UID
-      setTempFileUid(null);
       message.success('Image uploaded successfully');
     } catch (err) {
       setUploading(false);
@@ -225,21 +226,19 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
 
   // Handle Upload Change - Update file list
   const handleUploadChange: UploadProps['onChange'] = ({ fileList: newFileList }) => {
-    const isAddingFile = newFileList.length > fileList.length;
+    const normalizedList = normalizeUploadList(newFileList);
+    const isAddingFile = normalizedList.length > fileList.length;
 
     // 当用户选择文件时，记录最后添加的临时文件的UID，并保持显示上一次确认的图片
     if (isAddingFile) {
-      const newFile = newFileList[newFileList.length - 1];
-      setTempFileUid(newFile.uid);
-
       // 不展示未确认的本地文件，继续显示上一次确认的图片列表
       setFileList(previousFileList);
       return;
     }
 
     // 处理删除等操作
-    setFileList(newFileList);
-    setPreviousFileList(newFileList);
+    setFileList(normalizedList);
+    setPreviousFileList(normalizedList);
 
     if (newFileList.length === 0) {
       form.setFieldValue('imagePath', null);
@@ -264,7 +263,6 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
       form.setFieldValue('imagePath', null);
     }
 
-    setTempFileUid(null);
   };
 
   const uploadButton = (
@@ -474,8 +472,7 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
             justifyContent: 'center',
             overflow: 'hidden'
           },
-          mask: { backgroundColor: 'transparent' },
-          wrap: { backgroundColor: 'transparent' }
+          mask: { backgroundColor: 'transparent' }
         }}
         closable={false}
         maskClosable={true}

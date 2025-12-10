@@ -259,8 +259,7 @@ const HairstylesPage: React.FC = () => {
             justifyContent: 'center',
             overflow: 'hidden'
           },
-          mask: { backgroundColor: 'transparent' },
-          wrap: { backgroundColor: 'transparent' }
+          mask: { backgroundColor: 'transparent' }
         }}
         closable={false}
         maskClosable={true}
