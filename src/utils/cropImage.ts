@@ -87,3 +87,73 @@ export const dataURLToFile = (dataURL: string, fileName: string): File => {
 
   return new File([u8arr], fileName, { type: mime });
 };
+
+/**
+ * Compress a canvas image to a target size while preserving aspect ratio.
+ * If the original type is PNG, we convert to JPEG to improve compression.
+ */
+export const compressCanvasImage = async (
+  canvas: HTMLCanvasElement,
+  originalFile: File,
+  maxSizeKB: number = 400
+): Promise<File> => {
+  const preferredType = originalFile.type === 'image/png' ? 'image/jpeg' : originalFile.type;
+  const maxSize = maxSizeKB * 1024;
+
+  const generateBlob = (currentCanvas: HTMLCanvasElement, quality: number) =>
+    new Promise<Blob>((resolve, reject) => {
+      currentCanvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error('Failed to generate image blob'));
+            return;
+          }
+          resolve(blob);
+        },
+        preferredType,
+        quality
+      );
+    });
+
+  const resizeCanvas = (currentCanvas: HTMLCanvasElement, scale: number) => {
+    const resizedCanvas = document.createElement('canvas');
+    resizedCanvas.width = Math.max(1, Math.floor(currentCanvas.width * scale));
+    resizedCanvas.height = Math.max(1, Math.floor(currentCanvas.height * scale));
+    const ctx = resizedCanvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Could not get canvas context for resizing');
+    }
+    ctx.drawImage(currentCanvas, 0, 0, resizedCanvas.width, resizedCanvas.height);
+    return resizedCanvas;
+  };
+
+  let quality = 0.92;
+  let workingCanvas = canvas;
+  let blob = await generateBlob(workingCanvas, quality);
+
+  // Step down quality first
+  while (blob.size > maxSize && quality > 0.5) {
+    quality = Math.max(0.5, quality - 0.1);
+    blob = await generateBlob(workingCanvas, quality);
+  }
+
+  // If still too large, proportionally resize the canvas while keeping aspect ratio
+  while (blob.size > maxSize) {
+    const scale = Math.sqrt(maxSize / blob.size);
+    if (!isFinite(scale) || scale >= 1) {
+      break;
+    }
+    workingCanvas = resizeCanvas(workingCanvas, scale);
+    blob = await generateBlob(workingCanvas, quality);
+
+    if (workingCanvas.width <= 10 || workingCanvas.height <= 10) {
+      break;
+    }
+  }
+
+  const extension = preferredType.split('/')[1] || 'jpeg';
+  const baseName = originalFile.name.replace(/\.[^/.]+$/, '');
+  const fileName = `${baseName}.${extension}`;
+
+  return new File([blob], fileName, { type: preferredType });
+};

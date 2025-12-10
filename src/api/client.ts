@@ -1,6 +1,6 @@
 import axios, { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
-import { message } from 'antd';
 import { ApiResponse } from './types';
+import { getMessageApi } from '../utils/messageApi';
 
 // Hardcoded for demo, normally from import.meta.env.VITE_API_BASE_URL
 const BASE_URL = "http://localhost:8080";
@@ -32,7 +32,7 @@ apiClient.interceptors.response.use(
     // According to contract: error === 0 is success
     if (res.error !== 0) {
       // Business logic error
-      message.error(res.message || 'Error');
+      getMessageApi()?.error(res.message || 'Error');
       // We reject here so React Query knows it failed
       return Promise.reject(new Error(res.message || 'Unknown Error'));
     }
@@ -42,7 +42,7 @@ apiClient.interceptors.response.use(
   (error) => {
     // Network or Server Errors (4xx, 5xx)
     const errorMsg = error.response?.data?.message || error.message || 'Network Error';
-    message.error(errorMsg);
+    getMessageApi()?.error(errorMsg);
     
     // Optional: Handle 401 Unauthorized globally
     if (error.response?.status === 401) {

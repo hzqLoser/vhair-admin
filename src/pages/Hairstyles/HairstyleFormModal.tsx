@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Form, Input, Select, InputNumber, Upload, message, Button } from 'antd';
+import { Modal, Form, Input, Select, InputNumber, Upload, Button, App as AntdApp } from 'antd';
 import { PlusOutlined, LoadingOutlined, UploadOutlined } from '@ant-design/icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AdminHairstyle, AdminCreateHairstyleRequest, AdminUpdateHairstyleRequest } from '../../api/types';
@@ -8,7 +8,7 @@ import { uploadImageApi } from '../../api/upload';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
 import Cropper from 'react-easy-crop';
 import 'react-easy-crop/react-easy-crop.css';
-import { getCroppedImg } from '../../utils/cropImage';
+import { compressCanvasImage, getCroppedImg } from '../../utils/cropImage';
 
 interface Props {
   open: boolean;
@@ -23,6 +23,7 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
   const isEdit = !!initialValues;
+  const { message } = AntdApp.useApp();
 
   // Image Upload State
   const [fileList, setFileList] = useState<UploadFile[]>([]);
@@ -36,11 +37,19 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [imageSrc, setImageSrc] = useState<string>('');
   const [originalFile, setOriginalFile] = useState<File | null>(null);
-  const [tempFileUid, setTempFileUid] = useState<string | null>(null); // 保存临时文件的UID
+  const [previousFileList, setPreviousFileList] = useState<UploadFile[]>([]);
 
   // Image Preview State
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewImage, setPreviewImage] = useState('');
+
+  const normalizeUploadList = (list: UploadFile[]): UploadFile[] =>
+    list.map(({ uid, name, status, url, thumbUrl }) => ({
+      uid,
+      name,
+      status,
+      url: url || thumbUrl,
+    }));
 
   // Auto adjust initial zoom to fit image in crop area
   useEffect(() => {
@@ -83,9 +92,16 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
           status: 'done',
           url: initialValues.imageUrl,
         }]);
+        setPreviousFileList([{
+          uid: '-1',
+          name: 'current-image.png',
+          status: 'done',
+          url: initialValues.imageUrl,
+        }]);
       } else {
         form.resetFields();
         setFileList([]);
+        setPreviousFileList([]);
       }
     }
   }, [open, initialValues, form]);
@@ -142,13 +158,15 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
 
   // Handle File Selection and Open Crop Modal
   const handleFileSelect = (file: File) => {
+    setPreviousFileList(normalizeUploadList(fileList));
     const reader = new FileReader();
     reader.onload = (e) => {
       setImageSrc(e.target?.result as string);
       setOriginalFile(file);
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
+      setCroppedAreaPixels(null);
       setCropModalVisible(true);
-      // 使用当前时间戳作为临时ID
-      setTempFileUid(Date.now().toString());
     };
     reader.readAsDataURL(file);
   };
@@ -169,33 +187,29 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
       setUploading(true);
       const croppedImage = await getCroppedImg(imageSrc, croppedAreaPixels);
 
-      // Convert cropped canvas to File
-      const blob = await new Promise<Blob>((resolve) => {
-        croppedImage.toBlob((b) => resolve(b!));
-      });
+      // Compress cropped canvas before upload to ensure it is under 400KB
+      const compressedFile = await compressCanvasImage(croppedImage, originalFile, 400);
 
-      const croppedFile = new File([blob], originalFile.name, {
-        type: originalFile.type,
-      });
-
-      // Upload cropped file
-      const res = await uploadImageApi(croppedFile);
+      // Upload compressed & cropped file
+      const res = await uploadImageApi(compressedFile);
       setUploading(false);
 
       // Update Form Field for backend submission
       form.setFieldValue('imagePath', res.imagePath);
 
       // Update UI Preview
-      setFileList([{
+      const uploadedFile: UploadFile = {
         uid: '1',
-        name: originalFile.name,
+        name: compressedFile.name,
         status: 'done',
         url: res.imageUrl,
-      }]);
+      };
+
+      setFileList([uploadedFile]);
+      setPreviousFileList([uploadedFile]);
 
       setCropModalVisible(false);
       // 清空临时文件UID
-      setTempFileUid(null);
       message.success('Image uploaded successfully');
     } catch (err) {
       setUploading(false);
@@ -212,18 +226,20 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
 
   // Handle Upload Change - Update file list
   const handleUploadChange: UploadProps['onChange'] = ({ fileList: newFileList }) => {
-    // 当用户选择文件时，记录最后添加的临时文件的UID
-    if (newFileList.length > fileList.length) {
-      const newFile = newFileList[newFileList.length - 1];
-      if (newFile.status === 'uploading' && tempFileUid) {
-        // 更新临时文件的UID为Ant Design分配的UID
-        setTempFileUid(newFile.uid);
-      }
+    const normalizedList = normalizeUploadList(newFileList);
+    const isAddingFile = normalizedList.length > fileList.length;
+
+    // 当用户选择文件时，记录最后添加的临时文件的UID，并保持显示上一次确认的图片
+    if (isAddingFile) {
+      // 不展示未确认的本地文件，继续显示上一次确认的图片列表
+      setFileList(previousFileList);
+      return;
     }
 
-    setFileList(newFileList);
+    // 处理删除等操作
+    setFileList(normalizedList);
+    setPreviousFileList(normalizedList);
 
-    // If removed
     if (newFileList.length === 0) {
       form.setFieldValue('imagePath', null);
     }
@@ -239,20 +255,14 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
     setZoom(1);
     setCroppedAreaPixels(null);
 
-    // Clear the temporary file that was selected but not cropped
-    if (tempFileUid) {
-      const updatedFileList = fileList.filter(file => file.uid !== tempFileUid);
-      setFileList(updatedFileList);
+    // 恢复上一次确认的图片列表，清除未确认的本地文件
+    setFileList(previousFileList);
+    setPreviousFileList(previousFileList);
 
-      // If we're editing and removed the only file, keep the original imagePath
-      // Only clear imagePath if we're creating a new hairstyle or explicitly removed all files
-      if (!initialValues && updatedFileList.length === 0) {
-        form.setFieldValue('imagePath', null);
-      }
+    if (!previousFileList.length) {
+      form.setFieldValue('imagePath', null);
     }
 
-    // 清空临时文件UID
-    setTempFileUid(null);
   };
 
   const uploadButton = (
@@ -374,10 +384,10 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
         // Remove default footer to customize layout
         footer={null}
         width={900} // Increase modal width for better layout
-        destroyOnClose
+        destroyOnHidden
         zIndex={10000}
         // Add padding to prevent content from touching modal edges
-        bodyStyle={{ padding: '20px', overflow: 'visible' }}
+        styles={{ body: { padding: '20px', overflow: 'visible' } }}
       >
         <div className="flex flex-col items-center gap-6">
           {/* Use fixed size container with proper aspect ratio */}
@@ -395,7 +405,17 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
                     onZoomChange={setZoom}
                     onCropComplete={handleCropComplete}
                     // Set container height explicitly
-                    style={{ containerStyle: { height: '100%', width: '100%' } }}
+                    style={{
+                      containerStyle: { height: '100%', width: '100%' },
+                      cropAreaStyle: {
+                        border: '2px dashed #1677ff',
+                        boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.45)',
+                      },
+                      mediaStyle: {
+                        objectFit: 'contain',
+                        objectPosition: 'center',
+                      },
+                    }}
                     // Enable mouse wheel zoom
                     zoomWithScroll={true}
                   />
@@ -443,21 +463,22 @@ const HairstyleFormModal: React.FC<Props> = ({ open, onClose, initialValues }) =
           maxHeight: '90vh',
           zIndex: 10000
         }}
-        bodyStyle={{
-          padding: '0',
-          backgroundColor: 'transparent',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden'
+        styles={{
+          body: {
+            padding: '0',
+            backgroundColor: 'transparent',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden'
+          },
+          mask: { backgroundColor: 'transparent' }
         }}
-        maskStyle={{ backgroundColor: 'transparent' }}
-        wrapStyle={{ backgroundColor: 'transparent' }}
         closable={false}
         maskClosable={true}
         transitionName=""
         maskTransitionName=""
-        destroyOnClose={true}
+        destroyOnHidden={true}
       >
         <img
           alt="Preview"
